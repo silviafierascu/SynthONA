@@ -141,6 +141,30 @@ identical(synthona_generate(p)$edges, synthona_generate(p)$edges)
 #> TRUE
 ```
 
+## Repository layout
+
+| Path | Contents |
+|------|----------|
+| `R/` | Package source. One module per stage of the protocol. |
+| `man/` | Reference documentation for every function. Generated. |
+| `tests/` | Test suite, including a regression test per fixed defect. |
+| `vignettes/` | Long-form guide to generating and scoring a benchmark. |
+| `inst/` | Files installed alongside the package: citation, standalone script, spelling wordlist. |
+| `data-raw/` | Scripts that build things but are not part of the package. |
+| `.github/` | Continuous integration workflow. |
+
+| File | Contents |
+|------|----------|
+| `DESCRIPTION` | Package metadata, version and dependencies. |
+| `NAMESPACE` | The functions the package exports. Generated. |
+| `NEWS.md` | What changed in each release. |
+| `README.md` | This file. |
+| `ACKNOWLEDGEMENTS.md` | Who contributed what. |
+| `LICENSE` | MIT licence text. |
+| `cran-comments.md` | Notes to the CRAN maintainers for submission. |
+| `_pkgdown.yml` | Layout of the documentation website. |
+| `synth_ona_benchmark_protocol.rmd` | The protocol as a narrative document. |
+
 ## Citation
 
 If you use SynthONA in published work, please cite the protocol. Run
