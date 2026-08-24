@@ -26,6 +26,19 @@ reference:
       - generate_snapshots
       - synthona_graph
 
+  - title: Topology engines
+    desc: >
+      The base structure is produced by one of several engines, each a classical
+      network model adapted to organisational constraints. They are exported so
+      that a structure can be built directly, and so that the set can be
+      extended.
+    contents:
+      - generate_random_graph
+      - generate_small_world
+      - generate_scale_free
+      - generate_sbm
+      - generate_hierarchy
+
   - title: Ground truth and scoring
     desc: >
       Every dataset ships with the answer key it was built from, so a method
@@ -53,12 +66,14 @@ reference:
       - small_world_sigma
       - graph_from_edges
       - validate_dataset
+      - summary.synthona_dataset
 
   - title: Scenarios and corpora
     contents:
       - synthona_registry
       - synthona_scenario
       - scenario_table
+      - scenario_metrics
       - build_corpus
       - corpus_summary
       - build_all_scenarios
