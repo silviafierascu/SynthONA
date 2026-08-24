@@ -81,3 +81,42 @@ test_that("tie strength is inverted before being used as a path distance", {
   igraph::E(g)$weight <- c(1, 0.5, 0.25, 0.1)
   expect_equal(tie_distance(g), 1 / c(1, 0.5, 0.25, 0.1))
 })
+
+test_that("path length treats tie strength as strength, not distance", {
+  # igraph::mean_distance() picks up the `weight` edge attribute and reads it
+  # as distance unless told otherwise. Tie strength means the opposite, so a
+  # bare call produced mean path lengths below 1 -- impossible in a simple
+  # graph, and the signature of this bug in the published datasets.
+  d <- synthona_generate(synthona_params(
+    n = 120, topology = "er", mean_degree = 6, layers = "communication",
+    seed_topology = 42
+  ))
+  m <- compute_network_metrics(d$nodes, d$edges, n_random = 0L)
+  g <- synthona_graph(d)
+  unweighted <- igraph::mean_distance(g, directed = FALSE, weights = NA)
+
+  expect_gt(m$mean_path_length, 1)
+  # Weights are reciprocated, and every tie strength is below 1, so every hop
+  # costs more than one unit of distance.
+  expect_gt(m$mean_path_length, unweighted)
+})
+
+test_that("the small-world coefficient compares like with like", {
+  # Sigma divides observed path length by that of unweighted random reference
+  # graphs. Measuring the observed side weighted made every topology look
+  # small-world, including Erdos-Renyi, whose sigma is 1 by construction.
+  er <- synthona_generate(synthona_params(
+    n = 150, topology = "er", mean_degree = 6, layers = "communication",
+    seed_topology = 42
+  ))
+  ws <- synthona_generate(synthona_params(
+    n = 150, topology = "ws", mean_degree = 6, layers = "communication",
+    seed_topology = 42
+  ))
+
+  sigma_er <- compute_network_metrics(er$nodes, er$edges, n_random = 20L)$small_world_sigma
+  sigma_ws <- compute_network_metrics(ws$nodes, ws$edges, n_random = 20L)$small_world_sigma
+
+  expect_lt(sigma_er, 1.5)
+  expect_gt(sigma_ws, sigma_er)
+})

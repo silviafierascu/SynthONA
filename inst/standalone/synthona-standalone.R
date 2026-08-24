@@ -1935,7 +1935,9 @@ compute_network_metrics <- function(nodes, edges, snapshot = NULL,
     degree_gini = round(gini(deg), 3),
     clustering = round(igraph::transitivity(g, type = "global"), 4),
     mean_path_length = if (igraph::vcount(giant) > 1) {
-      round(suppressWarnings(igraph::mean_distance(giant, directed = FALSE)), 3)
+      round(suppressWarnings(igraph::mean_distance(
+        giant, directed = FALSE, weights = tie_distance(giant)
+      )), 3)
     } else {
       NA_real_
     },
@@ -1974,7 +1976,11 @@ small_world_sigma <- function(g, n_random = 20L, seed = SEED_TOPOLOGY_BASE) {
   c_obs <- igraph::transitivity(g, type = "global")
   comp <- igraph::components(g)
   giant <- igraph::induced_subgraph(g, which(comp$membership == which.max(comp$csize)))
-  l_obs <- suppressWarnings(igraph::mean_distance(giant, directed = FALSE))
+  # Sigma compares an observed graph against random graphs of the same order
+  # and density, and those references are unweighted. The observed path length
+  # has to be measured the same way or the ratio is not a comparison at all:
+  # weighted against unweighted inflates sigma several-fold.
+  l_obs <- suppressWarnings(igraph::mean_distance(giant, directed = FALSE, weights = NA))
 
   ref <- with_local_seed(seed, {
     vapply(seq_len(n_random), function(i) {
@@ -1983,7 +1989,7 @@ small_world_sigma <- function(g, n_random = 20L, seed = SEED_TOPOLOGY_BASE) {
       gir <- igraph::induced_subgraph(gr, which(cr$membership == which.max(cr$csize)))
       c(
         igraph::transitivity(gr, type = "global"),
-        suppressWarnings(igraph::mean_distance(gir, directed = FALSE))
+        suppressWarnings(igraph::mean_distance(gir, directed = FALSE, weights = NA))
       )
     }, numeric(2))
   })
