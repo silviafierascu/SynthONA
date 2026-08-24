@@ -61,7 +61,7 @@ With a census of a known network, community detection should do well:
 
 ```{r}
 g <- synthona_graph(d)
-set.seed(20260820)
+set.seed(47)
 louvain <- igraph::cluster_louvain(g)
 score_communities(d$truth, louvain)
 ```
@@ -87,7 +87,7 @@ results <- do.call(rbind, lapply(names(designs), function(nm) {
 
   # Louvain is stochastic, so it is seeded to keep this table reproducible.
   # Generation is deterministic; the method under test need not be.
-  set.seed(20260820)
+  set.seed(47)
   found <- igraph::cluster_louvain(gg)
 
   btw <- igraph::betweenness(gg, normalized = TRUE)
@@ -117,7 +117,7 @@ sweep <- do.call(rbind, lapply(c(0.40, 0.60, 0.80, 0.95), function(w) {
   ds <- synthona_generate(update_params(p, within_share = w, n = 250))
   obs <- synthona_observe(ds, observation_design(response_rate = 0.6,
                                                  name_generator_limit = 6))
-  set.seed(20260820)
+  set.seed(47)
   data.frame(
     within_share = w,
     ari = round(score_communities(
