@@ -13,3 +13,4 @@
 ^protocol_.*\.html$
 ^ACKNOWLEDGEMENTS\.md$
 ^[^/]*\.pdf$
+^private$

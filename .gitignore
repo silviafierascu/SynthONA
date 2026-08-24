@@ -28,3 +28,6 @@ protocol_standalone.html
 
 # Internal working documents, not for publication
 /*.pdf
+
+# Private working notes, not for publication
+private/
