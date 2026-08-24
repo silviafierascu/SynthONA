@@ -1,0 +1,13 @@
+^.*\.Rproj$
+^\.Rproj\.user$
+^\.github$
+^output$
+^synth_ona_benchmark_protocol\.rmd$
+^LICENSE\.md$
+^cran-comments\.md$
+^_pkgdown\.yml$
+^docs$
+^SynthONA\.Rcheck$
+^data-raw$
+^synth_ona_benchmark_protocol\.rmd\.bak$
+^protocol_.*\.html$

@@ -1,0 +1,151 @@
+---
+title: "Benchmarking a method against known ground truth"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Benchmarking a method against known ground truth}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+set.seed(1)
+```
+
+```{r setup}
+library(SynthONA)
+```
+
+The problem this package addresses is that organisational network methods cannot
+normally be validated. Real ONA data is confidential and, more fundamentally, nobody
+knows the true answer for it: there is no independent record of who the real brokers
+are. A method that reports a plausible-looking set of brokers cannot be shown to be
+right or wrong.
+
+Synthetic data solves that, but only if it ships with the answer key and only if it
+is degraded the way real data is degraded.
+
+## A specification is an object
+
+```{r}
+p <- synthona_params(
+  n = 400,
+  template = "tech_product",
+  topology = "sbm",
+  mean_degree = 12,
+  within_share = 0.85,
+  layers = c("communication", "advice", "trust")
+)
+p
+```
+
+`within_share` is the share of a person's ties expected to stay inside their own
+department. It is the dial that controls how siloed the organisation is, and it is
+the quantity a community detection method is being asked to recover.
+
+## Generation records what it built
+
+```{r}
+d <- synthona_generate(p)
+d
+d$truth
+```
+
+The ground truth is computed on the complete network, before any noise. It is not
+re-derived from the observed data later, which is what makes it an answer key rather
+than another estimate.
+
+## Recovery on the complete network
+
+With a census of a known network, community detection should do well:
+
+```{r}
+g <- synthona_graph(d)
+set.seed(20260820)
+louvain <- igraph::cluster_louvain(g)
+score_communities(d$truth, louvain)
+```
+
+## Recovery under a realistic survey
+
+Real ONA data is collected by survey. Not everyone answers, name generators cap how
+many colleagues can be listed, and memory favours strong ties.
+
+```{r}
+designs <- list(
+  census  = observation_design(),
+  good    = observation_design(response_rate = 0.80, name_generator_limit = 10),
+  typical = observation_design(response_rate = 0.50, name_generator_limit = 5,
+                               recall_probability = 0.80),
+  poor    = observation_design(response_rate = 0.30, name_generator_limit = 3,
+                               recall_probability = 0.60)
+)
+
+results <- do.call(rbind, lapply(names(designs), function(nm) {
+  obs <- synthona_observe(d, designs[[nm]])
+  gg <- synthona_graph(obs)
+
+  # Louvain is stochastic, so it is seeded to keep this table reproducible.
+  # Generation is deterministic; the method under test need not be.
+  set.seed(20260820)
+  found <- igraph::cluster_louvain(gg)
+
+  btw <- igraph::betweenness(gg, normalized = TRUE)
+  top <- names(sort(btw, decreasing = TRUE))[seq_along(d$truth$brokers)]
+
+  cbind(
+    design = nm,
+    ties = nrow(obs$edges),
+    score_communities(d$truth, found)[, c("ari", "nmi")],
+    broker_f1 = score_brokers(d$truth, top)$f1
+  )
+}))
+results
+```
+
+The truth object is untouched by observation, so every design is scored against the
+same answer key. This is the question the package exists to answer: how much survey
+quality does a given method need before its conclusions stop holding?
+
+## Sweeping one parameter
+
+Because the specification is an object, a sweep is an ordinary `lapply`. Tie volume
+is held constant, so only the quantity under study varies.
+
+```{r}
+sweep <- do.call(rbind, lapply(c(0.40, 0.60, 0.80, 0.95), function(w) {
+  ds <- synthona_generate(update_params(p, within_share = w, n = 250))
+  obs <- synthona_observe(ds, observation_design(response_rate = 0.6,
+                                                 name_generator_limit = 6))
+  set.seed(20260820)
+  data.frame(
+    within_share = w,
+    ari = round(score_communities(
+      ds$truth, igraph::cluster_louvain(synthona_graph(obs))
+    )$ari, 3)
+  )
+}))
+sweep
+```
+
+Recovery improves as the planted structure strengthens, which is the expected
+direction. A method that did not show this gradient would be suspect.
+
+## Checking the generator itself
+
+`validate_dataset()` compares realised quantities against the parameters that were
+supposed to produce them. Every check can fail.
+
+```{r}
+validate_dataset(d)[, c("check_id", "threshold", "measured", "pass")]
+```
+
+## Writing datasets out
+
+```{r, eval = FALSE}
+synthona_write(d, "output")
+read_manifest("output/sbm_n400")$reproduce
+```
+
+The manifest records the full specification and the protocol version, so an exported
+dataset can be regenerated exactly from its files.

@@ -1,0 +1,16 @@
+citHeader("To cite SynthONA in publications, please use:")
+
+bibentry(
+  bibtype  = "Manual",
+  title    = "SynthONA: A Parameterised Protocol for Generating Synthetic Organisational Network Benchmark Datasets",
+  author   = person("Silvia I.", "Fierascu"),
+  year     = "2026",
+  note     = "R package version 0.1.0",
+  url      = "https://github.com/sfierascu/SynthONA",
+  textVersion = paste(
+    "Fierascu, S. I. (2026).",
+    "SynthONA: A Parameterised Protocol for Generating Synthetic Organisational",
+    "Network Benchmark Datasets. R package version 0.1.0.",
+    "https://github.com/sfierascu/SynthONA"
+  )
+)

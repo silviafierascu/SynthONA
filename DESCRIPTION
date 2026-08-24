@@ -1,0 +1,43 @@
+Package: SynthONA
+Title: A Parameterised Protocol for Synthetic Organisational Network Benchmarks
+Version: 0.1.0
+Authors@R: 
+    person("Silvia I.", "Fierascu",
+           email = "silvia.fierascu@e-uvt.ro",
+           role = c("aut", "cre", "cph"))
+Description: Generates synthetic organisational network analysis (ONA)
+    benchmark datasets from an explicit, reproducible parameter
+    specification. Networks are calibrated on target mean degree rather
+    than fixed tie probability, so datasets remain comparable across
+    organisation sizes. Every dataset ships with the ground truth used to
+    build it -- planted community structure, brokers and articulation
+    points -- together with an optional measurement layer that applies
+    survey non-response, name-generator truncation and recall bias, so
+    that method performance can be scored against a known answer.
+    Includes an industry-template attribute model, a registry of
+    organisational scenarios, multi-layer and longitudinal generation,
+    weighted network metrics and validation reporting.
+License: MIT + file LICENSE
+Encoding: UTF-8
+Language: en-GB
+Depends: 
+    R (>= 4.1.0)
+Imports: 
+    dplyr (>= 1.1.0),
+    igraph (>= 2.0.0),
+    jsonlite,
+    purrr,
+    rlang,
+    stats,
+    tibble,
+    utils
+Suggests: 
+    knitr,
+    rmarkdown,
+    testthat (>= 3.0.0)
+Config/testthat/edition: 3
+VignetteBuilder: knitr
+Roxygen: list(markdown = TRUE)
+URL: https://github.com/sfierascu/SynthONA
+BugReports: https://github.com/sfierascu/SynthONA/issues
+Config/roxygen2/version: 8.1.0

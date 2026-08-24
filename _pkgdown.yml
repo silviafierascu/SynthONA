@@ -1,0 +1,78 @@
+url: https://sfierascu.github.io/SynthONA/
+
+template:
+  bootstrap: 5
+
+reference:
+  - title: Specifying a dataset
+    desc: >
+      The parameter object is the protocol made executable. Everything else
+      takes one as input.
+    contents:
+      - synthona_params
+      - update_params
+      - synthona_templates
+      - get_template
+      - SYNTHONA_LAYERS
+      - DIRECTED_LAYERS
+
+  - title: Generating
+    contents:
+      - synthona_generate
+      - generate_profiles
+      - add_non_human_actors
+      - generate_base_structure
+      - generate_layers
+      - generate_snapshots
+      - synthona_graph
+
+  - title: Ground truth and scoring
+    desc: >
+      Every dataset ships with the answer key it was built from, so a method
+      can be scored on what it recovered rather than on whether the output
+      looks plausible.
+    contents:
+      - record_truth
+      - score_communities
+      - score_brokers
+
+  - title: Measurement
+    desc: >
+      Survey data is not a census. Observation is applied separately from
+      generation, so one true network can be observed under many designs.
+    contents:
+      - observation_design
+      - synthona_observe
+
+  - title: Metrics and validation
+    contents:
+      - compute_node_metrics
+      - compute_group_metrics
+      - compute_network_metrics
+      - compute_outcomes
+      - small_world_sigma
+      - graph_from_edges
+      - validate_dataset
+
+  - title: Scenarios and corpora
+    contents:
+      - synthona_registry
+      - synthona_scenario
+      - scenario_table
+      - build_corpus
+      - corpus_summary
+      - build_all_scenarios
+      - BASELINE_MODELS
+
+  - title: Export
+    contents:
+      - synthona_write
+      - write_corpus
+      - read_manifest
+      - default_output_dir
+
+articles:
+  - title: Articles
+    navbar: ~
+    contents:
+      - benchmarking

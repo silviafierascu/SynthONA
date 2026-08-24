@@ -1,0 +1,6 @@
+# Normalise line endings so the package builds identically on every platform.
+* text=auto eol=lf
+
+# Generated from R/ by data-raw/make-standalone.R; do not edit by hand.
+inst/standalone/synthona-standalone.R linguist-generated=true
+man/*.Rd                              linguist-generated=true

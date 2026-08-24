@@ -1,0 +1,601 @@
+---
+title: "Synth ONA Benchmark Dataset"
+subtitle: "A Parameterised Protocol for Generating Synthetic Organisational Network Benchmark Datasets"
+author: "Silvia I. Fierăscu, PhD (West University of Timișoara) — Network First Manifesto Community"
+lang: en
+date: "`r format(Sys.Date(), '%B %d, %Y')`"
+output:
+  html_document:
+    toc: true
+    toc_depth: 3
+    toc_float:
+      collapsed: false
+      smooth_scroll: true
+    number_sections: true
+    theme: flatly
+    highlight: tango
+    code_folding: show
+    df_print: paged
+    fig_width: 10
+    fig_height: 6
+params:
+  engine: "package"
+  standalone_path: "inst/standalone/synthona-standalone.R"
+  small_n: 200
+  medium_n: 500
+  run_examples: true
+  build_exports: false
+  output_root: "output"
+---
+
+## AI-use disclosure {.unnumbered}
+
+> **AI-use disclosure:** Generative AI systems, including OpenAI ChatGPT and Anthropic Claude, supported parts of the code development and documentation for this protocol. All AI-assisted material was substantively reviewed, verified, revised, and approved by Silvia I. Fierăscu, who retains scientific and editorial responsibility. The release contains fully synthetic organizational data and no data about real individuals or organizations. This voluntary transparency notice is provided under Regulation (EU) 2024/1689 and is not a legal compliance certification. See `ai_use_disclosure.md` in the public release for details.
+
+## Accessibility notice {.unnumbered}
+
+> This protocol and its companion materials were prepared to the best of the depositor's ability in accordance with ICPSR's Depositor Guidelines for Accessible Study Materials and WCAG 2.1 Level AA. The rendered HTML includes semantic headings, table headers, keyboard-visible focus, a skip link, and responsive reflow. This UTF-8 R Markdown source is provided as a structured text alternative. See `accessibility_statement.md` for the complete review scope and known limitations.
+
+```{r knitr-setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE, message = FALSE, warning = FALSE,
+  collapse = FALSE, comment = "#>"
+)
+run_examples <- isTRUE(params$run_examples)
+```
+
+---
+
+# Two Ways to Run This Protocol {#engines}
+
+This document runs in either of two modes. Both execute **the same protocol** and
+produce **identical datasets**; they differ only in how the code reaches your session.
+
+| | **Package mode** | **Standalone mode** |
+|---|---|---|
+| Set | `engine: "package"` | `engine: "standalone"` |
+| Needs | `SynthONA` installed | one `.R` file, no install |
+| Loads via | `library(SynthONA)` | `source("synthona-standalone.R")` |
+| Best for | ongoing analysis, scripting, reuse | review, replication, archives, air-gapped machines |
+| Documentation | `?synthona_params` and friends | comments in the script |
+
+Choose in the YAML header at the top of this file, or override at render time:
+
+```r
+rmarkdown::render("synth_ona_benchmark_protocol.rmd",
+                  params = list(engine = "standalone"))
+```
+
+**Why both.** A protocol that only runs if a reader installs a package is harder to
+review and harder to archive: a repository deposit should still execute in ten years
+without depending on a package remaining installable. A protocol that only exists as
+a loose script is harder to maintain, test and cite. Offering both removes the
+trade-off.
+
+**Why they cannot drift.** The standalone script is *generated* from the package
+sources by `data-raw/make-standalone.R`, not written separately. A test in the
+package suite loads both and asserts that they return identical nodes, edges and
+ground truth. Two hand-maintained copies would eventually disagree, and neither the
+reader nor the author would notice.
+
+```{r engine-setup}
+engine <- match.arg(params$engine, c("package", "standalone"))
+
+if (engine == "package") {
+  library(SynthONA)
+  protocol_version <- as.character(utils::packageVersion("SynthONA"))
+  source_note <- "installed package"
+} else {
+  path <- params$standalone_path
+  if (!file.exists(path)) {
+    stop(
+      "Standalone script not found at: ", path,
+      "\nBuild it with: Rscript data-raw/make-standalone.R",
+      call. = FALSE
+    )
+  }
+  protocol_env <- new.env(parent = globalenv())
+  sys.source(path, envir = protocol_env)
+  attach(protocol_env, name = "synthona_standalone", warn.conflicts = FALSE)
+  protocol_version <- protocol_env$protocol_version()
+  source_note <- path
+}
+
+cat("Engine          :", engine, "\n")
+cat("Protocol version:", protocol_version, "\n")
+cat("Loaded from     :", source_note, "\n")
+```
+
+Both modes require these CRAN packages: **dplyr**, **igraph**, **jsonlite**,
+**purrr**, **tibble**. Neither requires a compiler.
+
+```{r dependency-check}
+deps <- c("dplyr", "igraph", "jsonlite", "purrr", "tibble")
+data.frame(
+  package = deps,
+  installed = vapply(deps, requireNamespace, logical(1), quietly = TRUE),
+  version = vapply(deps, function(p) {
+    tryCatch(as.character(utils::packageVersion(p)), error = function(e) NA_character_)
+  }, character(1)),
+  row.names = NULL
+)
+```
+
+---
+
+# What This Protocol Produces {#overview}
+
+Organisational network analysis has no shared benchmark. Real ONA data is
+confidential, and — more fundamentally — nobody knows the true answer for it. There
+is no independent record of who the real brokers in an organisation are, so a method
+that reports a plausible set of brokers cannot be shown to be right or wrong.
+
+This protocol generates organisations whose answer is known by construction, then
+degrades the data the way a real survey would, so that a method can be scored on
+what it actually recovered.
+
+Each dataset has three parts:
+
+1. **A workforce** — departments, locations, a seniority ladder, tenure,
+   performance, and derived attributes, drawn from an industry template.
+2. **A network** — one or more relational layers (communication, advice, trust and
+   others) built over a base structure, optionally across several time points.
+3. **The ground truth** — the planted communities, the true brokers, the
+   articulation points and the reporting tree, recorded on the complete network
+   before any noise is applied.
+
+## The Business Question
+
+> *"Our consultant says these five people are the critical connectors. Are they?"*
+
+You cannot answer that from real data alone. You can answer it here, because the
+protocol knows who the connectors are and can hand a method only what a survey
+would have seen.
+
+---
+
+# The Specification Object {#specification}
+
+Everything in the protocol takes a single validated parameter object. It is the
+protocol made executable: given the same object, generation reproduces the same
+dataset exactly.
+
+```{r params-demo}
+p <- synthona_params(
+  n = params$medium_n,
+  template = "tech_product",
+  topology = "hierarchy",
+  mean_degree = 12,
+  within_share = 0.72,
+  layers = c("communication", "advice", "trust")
+)
+p
+```
+
+## Why Mean Degree, Not Tie Probability
+
+`mean_degree` is the average number of colleagues a person is connected to.
+Specifying tie *probability* instead holds density constant, which forces average
+degree to grow in proportion to headcount: a 1,500-person organisation would come
+out roughly fifteen times better connected per person than a 100-person one.
+
+Real organisations do not behave that way. Individual contact volume is bounded by
+time and attention, so as an organisation grows, degree stays broadly flat while
+density falls. Calibrating on degree is what keeps datasets comparable across
+sizes — without it, size is a confound in every cross-size comparison, and a
+benchmark corpus spanning several sizes cannot be used to compare methods.
+
+```{r degree-invariance, eval=run_examples}
+invariance <- do.call(rbind, lapply(c(200, 800, 2000), function(n) {
+  d <- synthona_generate(synthona_params(n = n, mean_degree = 12))
+  g <- synthona_graph(d)
+  data.frame(
+    n = n,
+    mean_degree = round(mean(igraph::degree(g)), 2),
+    density = round(igraph::edge_density(g), 5)
+  )
+}))
+knitr::kable(
+  invariance,
+  caption = "Degree holds steady as the organisation grows; density falls instead.",
+  col.names = c("Employees", "Mean degree", "Density")
+)
+```
+
+## Why Within-Share
+
+`within_share` is the proportion of a person's ties that stay inside their own
+department. It is the single dial that controls how siloed the organisation is, and
+it is the quantity a community detection method is being asked to recover.
+
+Departments are **not** generated identically. A cohesion multiplier gives each unit
+its own inward-looking tendency around the target, because a synthetic organisation
+in which every department behaves the same is easier than the real thing: a method
+that assumes homogeneous groups would never be penalised for it.
+
+---
+
+# Building Blocks {#building-blocks}
+
+## Industry Templates
+
+Templates describe the shape of a workforce — which departments exist, where people
+sit, and what the seniority ladder looks like.
+
+```{r templates-table}
+templates <- synthona_templates()
+knitr::kable(
+  data.frame(
+    template = names(templates),
+    departments = vapply(templates, function(x) length(x$departments), integer(1)),
+    locations = vapply(templates, function(x) paste(x$locations, collapse = ", "), character(1)),
+    ladder = vapply(templates, function(x) paste(x$seniority_levels, collapse = " < "), character(1)),
+    row.names = NULL
+  ),
+  caption = "Industry templates"
+)
+```
+
+## The Workforce
+
+```{r profiles-demo, eval=run_examples}
+nodes <- generate_profiles(p)
+knitr::kable(
+  head(nodes[, c("person_id", "department", "seniority_level", "role_bucket",
+                 "location", "tenure_years", "gender")], 8),
+  caption = "Generated employee profiles (first eight)"
+)
+```
+
+```{r profiles-composition, eval=run_examples}
+knitr::kable(
+  as.data.frame(table(nodes$department, nodes$role_bucket)),
+  col.names = c("Department", "Role", "Count"),
+  caption = "Workforce composition"
+)
+```
+
+## Base Structures
+
+Six base structures are available. Three model departmental structure directly;
+three are classical reference models included precisely because their structure is
+*independent* of the attribute data, which makes them null models.
+
+```{r topology-table}
+knitr::kable(
+  data.frame(
+    topology = c("hierarchy", "sbm", "sbm_dual_legacy", "er", "ws", "ba"),
+    models_departments = c("yes", "yes", "yes", "no", "no", "no"),
+    description = c(
+      "Reporting tree plus informal ties; the enterprise default",
+      "Stochastic block model with departments as blocks",
+      "Block model with two legacy organisations, for mergers",
+      "Erdos-Renyi random graph; the null model",
+      "Watts-Strogatz small world",
+      "Preferential attachment, weighted by seniority"
+    )
+  ),
+  caption = "Base structures"
+)
+```
+
+```{r topology-comparison, eval=run_examples}
+comparison <- do.call(rbind, lapply(
+  c("hierarchy", "sbm", "er", "ws", "ba"),
+  function(topo) {
+    d <- synthona_generate(synthona_params(
+      n = params$small_n, topology = topo, mean_degree = 10, layers = "communication"
+    ))
+    m <- compute_network_metrics(d$nodes, d$edges, n_random = 0L)
+    data.frame(
+      topology = topo,
+      mean_degree = m$mean_degree,
+      clustering = m$clustering,
+      modularity = m$modularity_department,
+      path_length = m$mean_path_length
+    )
+  }
+))
+knitr::kable(
+  comparison, digits = 3,
+  caption = "The same tie budget spent on different structures. Only the department-aware models show modularity."
+)
+```
+
+## Relational Layers
+
+Each layer is a thinned, oriented view of the same base structure. Advice runs up
+the hierarchy — people ask upward; reporting and mentorship run down it.
+
+```{r layers-table}
+knitr::kable(
+  data.frame(
+    layer = SYNTHONA_LAYERS,
+    directed = SYNTHONA_LAYERS %in% DIRECTED_LAYERS
+  ),
+  caption = "Relational layers, and which are directed"
+)
+```
+
+---
+
+# Generating a Dataset {#generating}
+
+```{r generate-demo, eval=run_examples}
+d <- synthona_generate(p)
+d
+```
+
+```{r generate-truth, eval=run_examples}
+d$truth
+```
+
+The ground truth is computed on the complete network, before any noise. It is not
+re-derived from the observed data later — that is what makes it an answer key rather
+than another estimate.
+
+```{r generate-metrics, eval=run_examples}
+knitr::kable(
+  compute_group_metrics(d$nodes, d$edges),
+  digits = 3,
+  caption = "Department cohesion. The E-I index runs from -1 (talks only to itself) to +1 (talks only to others)."
+)
+```
+
+---
+
+# Measurement: What a Survey Would Actually See {#measurement}
+
+Survey network data is not a census. People ignore the survey, name generators cap
+how many colleagues may be listed, and memory favours strong and recent ties. These
+three mechanisms are the reason recovered brokers are not the true brokers, and the
+reason a method that scores well on a complete network can fail on a real one.
+
+Observation is applied **separately** from generation, so the same true network can
+be observed many times under different survey designs while the answer key stays
+untouched.
+
+```{r observation-design}
+observation_design(response_rate = 0.65, name_generator_limit = 8,
+                   recall_probability = 0.85)
+```
+
+## The Business Question
+
+> *"We got a 40% response rate. Can we still trust the analysis?"*
+
+```{r observation-sweep, eval=run_examples}
+designs <- list(
+  "Census"        = observation_design(),
+  "Good (80%)"    = observation_design(response_rate = 0.80, name_generator_limit = 10),
+  "Typical (50%)" = observation_design(response_rate = 0.50, name_generator_limit = 5,
+                                       recall_probability = 0.80),
+  "Poor (30%)"    = observation_design(response_rate = 0.30, name_generator_limit = 3,
+                                       recall_probability = 0.60)
+)
+
+benchmark <- synthona_generate(synthona_params(
+  n = params$medium_n, topology = "sbm", mean_degree = 12, within_share = 0.85
+))
+
+results <- do.call(rbind, lapply(names(designs), function(nm) {
+  obs <- synthona_observe(benchmark, designs[[nm]])
+  g <- synthona_graph(obs)
+
+  # Louvain is itself stochastic: repeated calls on the same graph return
+  # different partitions. The protocol's own generation is deterministic, but
+  # the method under test need not be, so it is seeded here to make this table
+  # reproducible. When benchmarking for real, run the method many times and
+  # report the distribution rather than a single draw.
+  set.seed(20260820)
+  found <- igraph::cluster_louvain(g)
+
+  btw <- igraph::betweenness(g, normalized = TRUE)
+  top <- names(sort(btw, decreasing = TRUE))[seq_along(benchmark$truth$brokers)]
+  scored <- score_communities(benchmark$truth, found)
+
+  data.frame(
+    design = nm,
+    ties_seen = nrow(obs$edges),
+    ari = round(scored$ari, 3),
+    nmi = round(scored$nmi, 3),
+    broker_f1 = round(score_brokers(benchmark$truth, top)$f1, 3)
+  )
+}))
+
+knitr::kable(
+  results,
+  col.names = c("Survey design", "Ties seen", "ARI", "NMI", "Broker F1"),
+  caption = "Community and broker recovery degrade as survey quality falls. Every row is scored against the same answer key."
+)
+```
+
+This is the question the protocol exists to answer: how much survey quality does a
+given method need before its conclusions stop holding?
+
+---
+
+# Scenarios {#scenarios}
+
+Scenarios are named parameter specifications for recurring organisational
+situations. Each is framed around the question it answers, and each is an ordinary
+specification object that can be modified.
+
+```{r scenario-table}
+knitr::kable(
+  scenario_table()[, c("scenario_id", "title", "question", "n", "topology")],
+  col.names = c("ID", "Title", "Question it answers", "Employees", "Structure"),
+  caption = "The scenario registry"
+)
+```
+
+```{r scenario-inspect}
+synthona_scenario("MA_M")
+```
+
+Any scenario can be resized or re-parameterised without editing the registry:
+
+```{r scenario-modify, eval=run_examples}
+small_merger <- synthona_scenario("MA_M", n = 300)
+merger <- synthona_generate(small_merger)
+merger
+```
+
+## Longitudinal Scenarios
+
+Panels are generated as a **process**, not as repeated perturbations of one
+baseline. Under cumulative mode each wave evolves from the wave before it, so a tie
+that dissolves stays dissolved. Perturbing the same baseline repeatedly would
+produce waves in which ties reappear after being dropped, which is not a trajectory
+any longitudinal method should be scored against.
+
+```{r temporal-demo, eval=run_examples}
+waves <- do.call(rbind, lapply(small_merger$snapshots, function(s) {
+  m <- compute_network_metrics(merger$nodes, merger$edges, snapshot = s, n_random = 0L)
+  e <- merger$edges[merger$edges$snapshot == s, ]
+  data.frame(
+    snapshot = s,
+    ties = nrow(e),
+    mean_degree = m$mean_degree,
+    cross_legacy = round(mean(!is.na(e$same_legacy) & !e$same_legacy), 3)
+  )
+}))
+knitr::kable(
+  waves, digits = 3,
+  caption = "Post-merger integration over twelve months. Cross-legacy ties should rise as the organisations combine.",
+  col.names = c("Wave", "Ties", "Mean degree", "Cross-legacy share")
+)
+```
+
+---
+
+# Validation {#validation}
+
+Acceptance checks exist to catch a generator that has silently stopped doing what it
+claims. A check that cannot fail is worse than no check, because it reports success
+either way. Every check below compares a realised quantity against the parameter
+that was supposed to produce it, or against a random null.
+
+```{r validation-demo, eval=run_examples}
+knitr::kable(
+  validate_dataset(d)[, c("check_id", "description", "threshold", "measured", "pass")],
+  col.names = c("Check", "What it asserts", "Threshold", "Measured", "Pass"),
+  caption = "Validation report"
+)
+```
+
+---
+
+# Benchmark Corpora {#corpora}
+
+For method comparison, a corpus sweeps a grid while holding tie volume constant, so
+that size and community strength can be varied independently.
+
+```{r corpus-demo, eval=run_examples}
+corpus <- build_corpus(
+  topologies = c("er", "sbm", "hierarchy"),
+  sizes = c(150L, 400L),
+  within_shares = c(0.55, 0.85),
+  mean_degree = 10,
+  layers = "communication"
+)
+
+knitr::kable(
+  corpus_summary(corpus)[, c("label", "n", "within_share", "mean_degree",
+                             "density", "modularity_department")],
+  digits = 4,
+  col.names = c("Dataset", "Employees", "Within-share", "Mean degree",
+                "Density", "Modularity"),
+  caption = "A benchmark corpus. Degree is constant by design; density and modularity vary."
+)
+```
+
+---
+
+# Export {#export}
+
+Every export writes a manifest recording the full specification and the protocol
+version, so an exported dataset can be regenerated exactly from its files alone.
+
+```{r export-demo, eval=isTRUE(params$build_exports)}
+out <- synthona_write(d, params$output_root)
+cat("Written to:", out, "\n")
+print(list.files(out))
+cat("\nRegenerate with:\n")
+cat(read_manifest(out)$reproduce, "\n")
+```
+
+```{r export-contract, eval=FALSE}
+# Every scenario, exported
+for (id in names(synthona_registry())) {
+  synthona_write(synthona_generate(synthona_scenario(id)), "output/scenarios")
+}
+
+# A full corpus
+write_corpus(build_corpus(), "output/corpus")
+```
+
+An exported dataset directory contains `nodes.csv`, `edges.csv`, per-layer and
+per-snapshot edge tables, metric tables, `ground_truth.json`, `graph.graphml`, and
+`manifest.json`.
+
+---
+
+# Reproducibility {#reproducibility}
+
+Generation draws from two independent seed streams:
+
+- `seed_topology` controls the wiring of the graph
+- `seed_attributes` controls who the people are
+
+Holding the attribute seed fixed while varying the topology seed produces structural
+variants of **the same workforce** — which is what a reorganisation comparison
+requires, since employee profiles should not change just because the structure did.
+
+```{r seed-streams, eval=run_examples}
+base <- synthona_params(n = params$small_n, topology = "sbm")
+variant <- update_params(base, seed_topology = base$seed_topology + 1L)
+
+a <- synthona_generate(base)
+b <- synthona_generate(variant)
+
+data.frame(
+  check = c("Same people", "Same structure"),
+  result = c(
+    identical(a$nodes$department, b$nodes$department),
+    identical(a$edges, b$edges)
+  )
+)
+```
+
+Sub-seeds are derived from *names* rather than positions, so adding a layer or a
+snapshot does not shift the random draws of any existing one. No function alters the
+calling session's random number generator state.
+
+```{r rng-hygiene, eval=run_examples}
+set.seed(42)
+before <- .Random.seed
+invisible(synthona_generate(synthona_params(n = 100)))
+data.frame(
+  check = c("Generation is deterministic", "Caller's RNG state untouched"),
+  result = c(
+    identical(synthona_generate(base)$edges, synthona_generate(base)$edges),
+    identical(before, .Random.seed)
+  )
+)
+```
+
+---
+
+# Session Information {#session}
+
+```{r session-info}
+cat("Engine:", engine, "\n\n")
+sessionInfo()
+```
+
+```{r cleanup, include=FALSE}
+if (engine == "standalone" && "synthona_standalone" %in% search()) {
+  detach("synthona_standalone")
+}
+```

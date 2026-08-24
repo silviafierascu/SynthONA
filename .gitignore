@@ -1,0 +1,23 @@
+# R session artefacts
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+*.Rproj
+
+# Build products and check output
+SynthONA.Rcheck/
+*.tar.gz
+*.tgz
+docs/
+
+# Generated datasets: reproducible from manifests, deposited separately
+output/
+
+# Rendered protocol documents: regenerate with rmarkdown::render()
+protocol_package.html
+protocol_standalone.html
+
+# Editor backups
+*.bak
+*~
