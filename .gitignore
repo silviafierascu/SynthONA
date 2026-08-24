@@ -21,3 +21,6 @@ protocol_standalone.html
 # Editor backups
 *.bak
 *~
+
+# Internal working documents, not for publication
+/*.pdf

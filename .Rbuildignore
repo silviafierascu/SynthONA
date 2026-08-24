@@ -11,3 +11,5 @@
 ^data-raw$
 ^synth_ona_benchmark_protocol\.rmd\.bak$
 ^protocol_.*\.html$
+^ACKNOWLEDGEMENTS\.md$
+^[^/]*\.pdf$
