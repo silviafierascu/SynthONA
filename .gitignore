@@ -13,6 +13,10 @@ docs/
 
 # Generated datasets: reproducible from manifests, deposited separately
 output/
+output.*/
+
+# Deposit package: built from output/, uploaded to the data repositories
+deposit/
 
 # Rendered protocol documents: regenerate with rmarkdown::render()
 protocol_package.html
