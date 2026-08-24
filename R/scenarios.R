@@ -70,7 +70,9 @@ synthona_registry <- function() {
       n = 120L, template = "tech_product", topology = "ws",
       mean_degree = 10, within_share = 0.55,
       layers = c("communication", "trust", "innovation", "mentorship"),
-      snapshots = "snapshot",
+      # Three snapshots so an integrating tool has something to animate and
+      # something to compare; they differ through ordinary evolution.
+      snapshots = c("snapshot", "animate", "compare"),
       tags = c("developer_pack", "multiplex", "api_ready")
     ),
     AI_M = list(
@@ -116,14 +118,15 @@ synthona_registry <- function() {
       question = "Are the two legacy organisations actually integrating?",
       n = 1500L, template = "professional_services", topology = "sbm_dual_legacy",
       mean_degree = 12, within_share = 0.68,
-      layers = c("communication", "collaboration", "trust", "innovation"),
+      layers = c("communication", "trust", "advice", "decision_influence",
+                 "innovation"),
       snapshots = c("M0", "M3", "M6", "M12"),
       extras = list(
         cross_legacy_thinning = 0.45,
         evolution = list(churn = 0.07),
         shocks = list(
-          list(at = "M3", layer = "collaboration", add = 0.20),
-          list(at = "M6", layer = "collaboration", add = 0.30, weight_delta = 0.05),
+          list(at = "M3", layer = "advice", add = 0.20),
+          list(at = "M6", layer = "advice", add = 0.30, weight_delta = 0.05),
           list(at = "M12", layer = "innovation", add = 0.35, weight_delta = 0.08)
         )
       ),
