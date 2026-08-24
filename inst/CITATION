@@ -6,11 +6,11 @@ bibentry(
   author   = person("Silvia I.", "Fierascu"),
   year     = "2026",
   note     = "R package version 0.1.0",
-  url      = "https://github.com/sfierascu/SynthONA",
+  url      = "https://github.com/silviafierascu/SynthONA",
   textVersion = paste(
     "Fierascu, S. I. (2026).",
     "SynthONA: A Parameterised Protocol for Generating Synthetic Organisational",
     "Network Benchmark Datasets. R package version 0.1.0.",
-    "https://github.com/sfierascu/SynthONA"
+    "https://github.com/silviafierascu/SynthONA"
   )
 )

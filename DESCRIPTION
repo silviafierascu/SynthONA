@@ -38,6 +38,6 @@ Suggests:
 Config/testthat/edition: 3
 VignetteBuilder: knitr
 Roxygen: list(markdown = TRUE)
-URL: https://github.com/sfierascu/SynthONA
-BugReports: https://github.com/sfierascu/SynthONA/issues
+URL: https://github.com/silviafierascu/SynthONA
+BugReports: https://github.com/silviafierascu/SynthONA/issues
 Config/roxygen2/version: 8.1.0

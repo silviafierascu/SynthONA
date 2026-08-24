@@ -11,8 +11,8 @@ Generates synthetic organisational network analysis (ONA) benchmark datasets fro
 \seealso{
 Useful links:
 \itemize{
-  \item \url{https://github.com/sfierascu/SynthONA}
-  \item Report bugs at \url{https://github.com/sfierascu/SynthONA/issues}
+  \item \url{https://github.com/silviafierascu/SynthONA}
+  \item Report bugs at \url{https://github.com/silviafierascu/SynthONA/issues}
 }
 
 }

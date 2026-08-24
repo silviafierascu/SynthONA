@@ -79,7 +79,7 @@ holding.
 
 ```r
 # install.packages("remotes")
-remotes::install_github("sfierascu/SynthONA")
+remotes::install_github("silviafierascu/SynthONA")
 ```
 
 ## Getting started
