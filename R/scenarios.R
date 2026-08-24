@@ -79,7 +79,8 @@ synthona_registry <- function() {
       question = "How does an AI rollout reshape advice seeking?",
       n = 1200L, template = "tech_product", topology = "hierarchy",
       mean_degree = 13, within_share = 0.68,
-      layers = c("communication", "advice", "tool_interaction"),
+      layers = c("communication", "advice", "trust", "innovation",
+                 "decision_influence", "tool_interaction"),
       snapshots = c("Q1", "Q2", "Q3", "Q4"),
       extras = list(
         non_human_actors = 6L,
@@ -98,7 +99,7 @@ synthona_registry <- function() {
       question = "What connectivity disappears when a layer of the organisation goes?",
       n = 1000L, template = "manufacturing", topology = "hierarchy",
       mean_degree = 11, within_share = 0.70,
-      layers = c("reporting", "communication", "advice"),
+      layers = c("reporting", "communication", "advice", "mentorship", "trust"),
       snapshots = c("baseline", "post_change"),
       extras = list(
         evolution = list(churn = 0.05),
@@ -134,7 +135,7 @@ synthona_registry <- function() {
       question = "Is the change programme reaching beyond its early adopters?",
       n = 900L, template = "healthcare_ops", topology = "sbm",
       mean_degree = 11, within_share = 0.66,
-      layers = c("communication", "trust", "energy"),
+      layers = c("communication", "trust", "energy", "innovation", "mentorship"),
       snapshots = c("before", "mid", "after"),
       extras = list(
         evolution = list(churn = 0.06),
@@ -152,12 +153,13 @@ synthona_registry <- function() {
       question = "What breaks if the single most central person leaves?",
       n = 800L, template = "tech_product", topology = "ba",
       mean_degree = 12, within_share = 0.60,
-      layers = c("communication", "advice", "mentorship"),
-      snapshots = c("baseline", "departure"),
+      layers = c("decision_influence", "advice", "trust", "communication",
+                 "mentorship"),
+      snapshots = c("baseline", "removal_sim"),
       snapshot_mode = "alternative",
       extras = list(
         evolution = list(churn = 0, weight_drift = 0),
-        shocks = list(list(at = "departure", remove_actor = "top_broker"))
+        shocks = list(list(at = "removal_sim", remove_actor = "top_broker"))
       ),
       tags = c("key_person_risk", "succession", "resilience")
     )

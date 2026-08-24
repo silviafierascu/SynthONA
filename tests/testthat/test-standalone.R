@@ -62,3 +62,17 @@ test_that("the standalone exposes every exported function", {
   missing <- exported[!vapply(exported, exists, logical(1), envir = env, inherits = FALSE)]
   expect_equal(missing, character(0))
 })
+
+test_that("the standalone carries the same scenario registry", {
+  path <- standalone_path()
+  skip_if_not(file.exists(path), "standalone script not built")
+
+  env <- new.env(parent = globalenv())
+  sys.source(path, envir = env)
+
+  # The equivalence test above passes explicit parameters, so it cannot see a
+  # stale registry baked into the shipped script. Compare the registries too:
+  # a scenario that silently loses a layer produces a different dataset under
+  # the same identifier.
+  expect_identical(env$synthona_registry(), synthona_registry())
+})
