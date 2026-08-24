@@ -1,7 +1,7 @@
 ---
 title: "Synth ONA Benchmark Dataset"
 subtitle: "A Parameterised Protocol for Generating Synthetic Organisational Network Benchmark Datasets"
-author: "Silvia I. Fierăscu, PhD (West University of Timișoara) — Network First Manifesto Community"
+author: "Silvia I. Fierăscu, PhD (West University of Timișoara)"
 lang: en
 date: "`r format(Sys.Date(), '%B %d, %Y')`"
 output:
