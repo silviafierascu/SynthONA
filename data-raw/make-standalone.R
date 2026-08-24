@@ -15,8 +15,8 @@
 FILE_ORDER <- c(
   "constants.R", "utils.R", "rng.R", "edges.R", "templates.R", "params.R",
   "attributes.R", "topology.R", "layers.R", "temporal.R", "truth.R",
-  "observe.R", "metrics.R", "validate.R", "generate.R", "scenarios.R",
-  "export.R", "corpus.R"
+  "observe.R", "metrics.R", "validate.R", "scenario_extras.R", "generate.R",
+  "scenarios.R", "export.R", "corpus.R"
 )
 
 strip_roxygen <- function(lines) {

@@ -127,6 +127,9 @@ validate_dataset <- function(dataset, degree_tolerance = 0.20) {
     dataset$truth$n_communities >= 2 && length(dataset$truth$brokers) >= 1
   )
 
+  extra <- scenario_validation_checks(dataset)
+  if (!is.null(extra)) checks[[length(checks) + 1L]] <- extra
+
   out <- dplyr::bind_rows(checks)
   out$scenario_id <- params$scenario_id %||% NA_character_
   out

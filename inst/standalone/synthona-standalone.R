@@ -2150,6 +2150,9 @@ validate_dataset <- function(dataset, degree_tolerance = 0.20) {
     dataset$truth$n_communities >= 2 && length(dataset$truth$brokers) >= 1
   )
 
+  extra <- scenario_validation_checks(dataset)
+  if (!is.null(extra)) checks[[length(checks) + 1L]] <- extra
+
   out <- dplyr::bind_rows(checks)
   out$scenario_id <- params$scenario_id %||% NA_character_
   out
@@ -2183,6 +2186,364 @@ null_brokerage_gini <- function(n, density, seed = SEED_TOPOLOGY_BASE, n_draws =
 }
 
 # ============================================================================
+# scenario_extras.R
+# ============================================================================
+
+# Scenario-specific extras -----------------------------------------------------
+#
+# Most of the protocol is scenario-agnostic: a scenario is a parameter
+# specification, and the generator never branches on which one it is. Three
+# things resist that treatment, because they are the substantive content of a
+# particular benchmark rather than a parameter of the general model:
+#
+#   * derived attributes the scenario is *about* -- who counts as an adoption
+#     champion, which roles are exposed in a restructuring;
+#   * the ties those attributes imply -- an adoption champion reaches for the
+#     tool, a culture programme's seed group carries extra energy;
+#   * the metrics and acceptance checks the benchmark is scored on.
+#
+# They are collected here so the rest of the package stays free of scenario
+# branching. Everything is keyed on `params$scenario_id`, so a hand-built
+# specification with no scenario identifier passes through untouched.
+
+safe_mean <- function(x) {
+  x <- x[is.finite(x)]
+  if (length(x) == 0) NA_real_ else mean(x)
+}
+
+safe_sd <- function(x) {
+  x <- x[is.finite(x)]
+  if (length(x) < 2) NA_real_ else stats::sd(x)
+}
+
+safe_round <- function(x, digits = 3L) {
+  ifelse(is.finite(x), round(x, digits), NA_real_)
+}
+
+sample_structured_pairs <- function(nodes, n_edges, seed, same_dept_bias = 0.7,
+                                    same_legacy_bias = NULL) {
+  nodes <- tibble::as_tibble(nodes)
+  empty <- tibble::tibble(
+    from = character(), to = character(),
+    same_dept = logical(), same_location = logical(), same_legacy = logical()
+  )
+  if (nrow(nodes) < 2 || n_edges <= 0) return(empty)
+
+  target <- min(as.integer(n_edges), nrow(nodes) * (nrow(nodes) - 1L) / 2L)
+  if (target <= 0) return(empty)
+
+  has_legacy <- "legacy_company" %in% names(nodes)
+
+  with_local_seed(seed, {
+    seen <- new.env(parent = emptyenv())
+    out <- vector("list", target)
+    n_out <- 0L
+    attempts <- 0L
+    max_attempts <- max(250L, target * 30L)
+
+    while (n_out < target && attempts < max_attempts) {
+      attempts <- attempts + 1L
+      i <- sample.int(nrow(nodes), 1)
+      cand <- setdiff(seq_len(nrow(nodes)), i)
+
+      same_dept <- nodes$department[cand] == nodes$department[i]
+      same_location <- nodes$location[cand] == nodes$location[i]
+      same_legacy <- if (has_legacy) {
+        nodes$legacy_company[cand] == nodes$legacy_company[i]
+      } else {
+        rep(NA, length(cand))
+      }
+
+      prob <- ifelse(same_dept, same_dept_bias, 1 - same_dept_bias)
+      prob <- prob + ifelse(same_location, 0.10, 0)
+      if (!is.null(same_legacy_bias) && !all(is.na(same_legacy))) {
+        prob <- prob + ifelse(same_legacy, same_legacy_bias, -same_legacy_bias)
+      }
+      prob <- normalise_prob(pmin(0.99, pmax(0.01, prob)))
+
+      j <- if (length(cand) == 1L) cand else sample(cand, 1, prob = prob)
+      a <- nodes$person_id[i]
+      b <- nodes$person_id[j]
+      lo <- min(a, b)
+      hi <- max(a, b)
+      key <- paste(lo, hi, sep = "|")
+      if (exists(key, envir = seen, inherits = FALSE)) next
+
+      assign(key, TRUE, envir = seen)
+      n_out <- n_out + 1L
+      out[[n_out]] <- tibble::tibble(
+        from = lo,
+        to = hi,
+        same_dept = nodes$department[i] == nodes$department[j],
+        same_location = nodes$location[i] == nodes$location[j],
+        same_legacy = if (has_legacy) {
+          nodes$legacy_company[i] == nodes$legacy_company[j]
+        } else {
+          NA
+        }
+      )
+    }
+
+    if (n_out == 0L) empty else dplyr::bind_rows(out[seq_len(n_out)])
+  })
+}
+
+add_unique_edges <- function(nodes, n_edges, layer, seed, same_dept_bias = 0.7,
+                             same_legacy_bias = NULL) {
+  if (nrow(nodes) < 2 || n_edges <= 0) return(empty_edge_tbl())
+
+  out <- sample_structured_pairs(
+    nodes, n_edges, seed,
+    same_dept_bias = same_dept_bias, same_legacy_bias = same_legacy_bias
+  )
+  if (nrow(out) == 0) return(empty_edge_tbl())
+
+  out$weight <- draw_edge_weights(
+    layer, out$same_dept, out$same_location, out$same_legacy,
+    seed = derive_seed(seed, "extras:weight")
+  )
+  out$layer <- layer
+  out$directed <- FALSE
+  orient_edges(out, nodes, layer, seed = derive_seed(seed, "extras:orient"))
+}
+
+apply_scenario_node_extras <- function(nodes, params) {
+  sid <- params$scenario_id %||% NA_character_
+  if (is.na(sid)) return(nodes)
+  seed <- derive_seed(params$seed_attributes, paste0("extras:nodes:", sid))
+
+  if (identical(sid, "AI_M")) {
+    human <- !nodes$is_non_human
+    cut <- stats::quantile(nodes$ai_adoption_score[human], 0.9, na.rm = TRUE)
+    nodes$adoption_champion <- human & nodes$ai_adoption_score >= cut
+    noise <- with_local_seed(seed, stats::rnorm(nrow(nodes), 0, 0.05))
+    nodes$manager_enablement_score <- round(soft_clip(
+      0.45 +
+        0.25 * scale01(nodes$change_readiness) +
+        0.20 * as.numeric(nodes$role_bucket %in% c("manager", "senior_manager", "executive")) +
+        noise,
+      0, 1
+    ), 3)
+  }
+
+  if (identical(sid, "MA_M")) {
+    # legacy_company is assigned by the dual-legacy topology, not here.
+    draw <- with_local_seed(seed, stats::rbeta(nrow(nodes), 2.5, 2.5))
+    nodes$integration_readiness <- round(soft_clip(
+      draw + ifelse(nodes$role_bucket == "executive", 0.12, 0), 0.01, 0.99
+    ), 3)
+  }
+
+  if (identical(sid, "RESIZE_M")) {
+    nodes$at_risk_role <- nodes$department %in% c("Operations", "Admin", "Finance") &
+      nodes$level <= 2
+  }
+
+  if (identical(sid, "SUCCESSION_M")) {
+    nodes$key_person_candidate <-
+      nodes$level >= stats::quantile(nodes$level, 0.8, na.rm = TRUE) |
+      nodes$ai_adoption_score >= 0.82
+  }
+
+  if (identical(sid, "CULTURE_M")) {
+    nodes$community_seed <-
+      nodes$department %in% c("Strategy", "Product", "Design", "Engineering", "Client Services") |
+      nodes$change_readiness > 0.7
+  }
+
+  nodes
+}
+
+apply_scenario_edge_extras <- function(nodes, edges, params) {
+  sid <- params$scenario_id %||% NA_character_
+  if (is.na(sid)) return(edges)
+  seed <- derive_seed(params$seed_attributes, paste0("extras:edges:", sid))
+
+  if (identical(sid, "AI_M") && "tool_interaction" %in% params$layers) {
+    human <- !nodes$is_non_human
+    cut <- stats::quantile(nodes$ai_adoption_score[human], 0.70, na.rm = TRUE)
+    users <- nodes$person_id[human & nodes$ai_adoption_score >= cut]
+    agents <- nodes$person_id[nodes$is_non_human]
+    if (length(users) > 0 && length(agents) > 0) {
+      tool <- with_local_seed(seed, {
+        tibble::tibble(
+          from = users,
+          to = sample(agents, length(users), replace = TRUE),
+          weight = round(stats::rbeta(length(users), 4, 2), 3),
+          layer = "tool_interaction",
+          directed = TRUE,
+          same_dept = FALSE,
+          same_location = FALSE,
+          same_legacy = NA
+        )
+      })
+      edges <- bind_edge_tables(edges, tool)
+    }
+  }
+
+  if (identical(sid, "CULTURE_M") && "energy" %in% params$layers) {
+    seed_group <- nodes[nodes$community_seed %||% FALSE, , drop = FALSE]
+    edges <- bind_edge_tables(edges, add_unique_edges(
+      seed_group,
+      n_edges = max(10L, round(nrow(nodes) * 0.03)),
+      layer = "energy",
+      seed = seed,
+      same_dept_bias = 0.45
+    ))
+  }
+
+  if (identical(sid, "MA_M") && "innovation" %in% params$layers) {
+    edges <- bind_edge_tables(edges, add_unique_edges(
+      nodes,
+      n_edges = max(12L, round(nrow(nodes) * 0.02)),
+      layer = "innovation",
+      seed = seed,
+      same_dept_bias = 0.40,
+      same_legacy_bias = -0.20
+    ))
+  }
+
+  compact_edges(coerce_edge_schema(edges))
+}
+
+scenario_metrics <- function(dataset, snapshot = NULL) {
+  stopifnot(inherits(dataset, "synthona_dataset"))
+  params <- dataset$params
+  sid <- params$scenario_id %||% NA_character_
+  if (is.na(sid)) return(list())
+
+  snapshot <- snapshot %||% params$snapshots[1]
+  nodes <- dataset$nodes
+  edges <- dataset$edges[dataset$edges$snapshot == snapshot, , drop = FALSE]
+  out <- list()
+
+  if (identical(sid, "AI_M")) {
+    out$team_adoption <- nodes |>
+      dplyr::group_by(.data$department) |>
+      dplyr::summarise(
+        adoption_velocity = safe_round(safe_mean(.data$ai_adoption_score), 3),
+        champion_count = sum(.data$adoption_champion, na.rm = TRUE),
+        manager_enablement = safe_round(safe_mean(.data$manager_enablement_score), 3),
+        .groups = "drop"
+      )
+  }
+
+  if (identical(sid, "MA_M")) {
+    cross <- !is.na(edges$same_legacy) & !edges$same_legacy
+    trust_cross <- safe_mean(edges$weight[edges$layer == "trust" & cross])
+    comm_cross <- safe_mean(edges$weight[edges$layer == "communication" & cross])
+    out$integration <- list(
+      cross_legacy_tie_ratio = safe_round(safe_mean(as.numeric(cross)), 3),
+      trust_lag_vs_communication = safe_round(comm_cross - trust_cross, 3)
+    )
+  }
+
+  if (identical(sid, "RESIZE_M")) {
+    reporting <- edges[edges$layer == "reporting", , drop = FALSE]
+    spans <- table(reporting$from)
+    out$manager_spans <- tibble::tibble(
+      person_id = names(spans),
+      manager_span = as.integer(spans)
+    )
+  }
+
+  if (identical(sid, "SUCCESSION_M")) {
+    g <- graph_from_edges(nodes, edges, snapshot = snapshot)
+    b <- igraph::betweenness(g, directed = FALSE, normalized = TRUE)
+    top <- igraph::V(g)$name[which.max(b)]
+    g2 <- igraph::delete_vertices(g, top)
+    comp <- igraph::components(g2)
+    out$node_removal <- list(
+      removed_person_id = top,
+      components_after_removal = comp$no,
+      giant_component_share_after_removal =
+        round(max(comp$csize) / igraph::vcount(g2), 3)
+    )
+  }
+
+  if (identical(sid, "CULTURE_M")) {
+    g <- graph_from_edges(nodes, edges, snapshot = snapshot)
+    out$culture <- list(
+      small_world_sigma = small_world_sigma(g),
+      cross_boundary_trust = safe_round(
+        safe_mean(edges$weight[edges$layer == "trust" & !edges$same_dept]), 3
+      )
+    )
+  }
+
+  out
+}
+
+scenario_validation_checks <- function(dataset, snapshot = NULL) {
+  params <- dataset$params
+  sid <- params$scenario_id %||% NA_character_
+  if (is.na(sid)) return(NULL)
+
+  snapshot <- snapshot %||% params$snapshots[1]
+  nodes <- dataset$nodes
+  edges <- dataset$edges[dataset$edges$snapshot == snapshot, , drop = FALSE]
+  checks <- list()
+
+  if (identical(sid, "AI_M")) {
+    tool_ties <- sum(edges$layer == "tool_interaction")
+    champions <- sum(nodes$adoption_champion %||% FALSE, na.rm = TRUE)
+    checks <- c(checks, list(
+      validation_row(
+        "tool_layer", "Tool interaction layer produced ties", "> 0",
+        tool_ties, tool_ties > 0
+      ),
+      validation_row(
+        "adoption_champions", "Adoption champions identified", ">= 1",
+        champions, champions > 0
+      )
+    ))
+  }
+
+  if (identical(sid, "MA_M")) {
+    has_legacy <- "legacy_company" %in% names(nodes)
+    cross_ratio <- safe_mean(as.numeric(!is.na(edges$same_legacy) & !edges$same_legacy))
+    checks <- c(checks, list(
+      validation_row(
+        "legacy_attr", "Legacy origin recorded on every actor", "present",
+        if (has_legacy) "present" else "absent", has_legacy
+      ),
+      validation_row(
+        "cross_legacy_ratio", "The two legacy organisations are connected", "> 0.05",
+        safe_round(cross_ratio, 3),
+        isTRUE(is.finite(cross_ratio) && cross_ratio > 0.05)
+      )
+    ))
+  }
+
+  if (identical(sid, "CULTURE_M")) {
+    seeded <- sum(nodes$community_seed %||% FALSE, na.rm = TRUE)
+    checks <- c(checks, list(validation_row(
+      "culture_seed_group", "A seed group carries the programme", ">= 1",
+      seeded, seeded > 0
+    )))
+  }
+
+  if (identical(sid, "RESIZE_M")) {
+    at_risk <- sum(nodes$at_risk_role %||% FALSE, na.rm = TRUE)
+    checks <- c(checks, list(validation_row(
+      "at_risk_roles", "Exposed roles identified", ">= 1",
+      at_risk, at_risk > 0
+    )))
+  }
+
+  if (identical(sid, "SUCCESSION_M")) {
+    candidates <- sum(nodes$key_person_candidate %||% FALSE, na.rm = TRUE)
+    checks <- c(checks, list(validation_row(
+      "key_person_candidates", "Succession candidates identified", ">= 1",
+      candidates, candidates > 0
+    )))
+  }
+
+  if (length(checks) == 0) return(NULL)
+  dplyr::bind_rows(checks)
+}
+
+# ============================================================================
 # generate.R
 # ============================================================================
 
@@ -2204,7 +2565,9 @@ synthona_generate <- function(params, non_human_actors = 0L) {
   }
 
   base <- generate_base_structure(nodes, params)
+  base$nodes <- apply_scenario_node_extras(base$nodes, params)
   edges <- generate_layers(base$graph, base$nodes, params)
+  edges <- apply_scenario_edge_extras(base$nodes, edges, params)
   edges <- generate_snapshots(base$nodes, edges, params)
 
   # Ground truth is recorded on the first snapshot, which is the network as

@@ -41,7 +41,9 @@ synthona_generate <- function(params, non_human_actors = 0L) {
   }
 
   base <- generate_base_structure(nodes, params)
+  base$nodes <- apply_scenario_node_extras(base$nodes, params)
   edges <- generate_layers(base$graph, base$nodes, params)
+  edges <- apply_scenario_edge_extras(base$nodes, edges, params)
   edges <- generate_snapshots(base$nodes, edges, params)
 
   # Ground truth is recorded on the first snapshot, which is the network as
