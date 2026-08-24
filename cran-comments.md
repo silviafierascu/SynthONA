@@ -1,6 +1,6 @@
 ## R CMD check results
 
-Local Windows 11, R 4.2.3, `R CMD check --as-cran`:
+Local Windows 11, R 4.2.3, `R CMD check --as-cran`, 24 August 2026:
 
     Status: 2 NOTEs
     0 errors | 0 warnings | 2 notes
@@ -11,11 +11,15 @@ Local Windows 11, R 4.2.3, `R CMD check --as-cran`:
   unable to reach a time server. Not reproducible on machines with network
   access to a time source.
 
+The local run used `--no-manual`; that machine has no LaTeX installation. The
+manual is built and checked on the Linux and macOS configurations below.
+
 ## Test environments
 
 * local Windows 11, R 4.2.3
 * GitHub Actions: macOS-latest (release), Windows-latest (release),
-  Ubuntu-latest (devel, release, oldrel-1)
+  Ubuntu-latest (devel, release, oldrel-1). All five configurations pass on
+  the submitted source.
 
 ## Notes on package behaviour
 
